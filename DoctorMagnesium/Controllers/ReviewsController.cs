@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DoctorMagnesium.Data;
 using DoctorMagnesium.Models;
+using DoctorMagnesium.DTOs.ReviewDTOs;
+using DoctorMagnesium.Mappers;
+using DoctorMagnesium.Interface;
 
 namespace DoctorMagnesium.Controllers
 {
@@ -15,74 +18,68 @@ namespace DoctorMagnesium.Controllers
     public class ReviewsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-
-        public ReviewsController(ApplicationDbContext context)
+        private readonly IReview _reviewRepo;
+        
+        public ReviewsController(ApplicationDbContext context, IReview reviewRepo)
         {
             _context = context;
+            _reviewRepo = reviewRepo;
         }
 
         // GET: api/Reviews
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Review>>> GetReviews()
+        public async Task<IActionResult> GetAll()
         {
-            return await _context.Reviews.ToListAsync();
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var reviews = await _reviewRepo.GetAllAsync();
+
+            var reviewDto = reviews.Select(s => s.ToReviewDTO());
+
+            return Ok(reviewDto);
         }
 
         // GET: api/Reviews/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Review>> GetReview(int id)
         {
-            var review = await _context.Reviews.FindAsync(id);
-
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+            var review = await _reviewRepo.GetByIdAsync(id);
             if (review == null)
             {
                 return NotFound();
             }
-
-            return review;
+            return Ok(review.ToReviewDTO());
         }
 
         // PUT: api/Reviews/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutReview(int id, Review review)
+        public async Task<IActionResult> PutReview([FromRoute] int id, [FromBody] UpdateReviewRequestDTO updateDto)
         {
-            if (id != review.Id)
-            {
-                return BadRequest();
-            }
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
-            _context.Entry(review).State = EntityState.Modified;
-
-            try
+            var review = await _reviewRepo.UpdateAsync(id, updateDto.ToReviewFromUpdate());
+            if (review == null)
             {
-                await _context.SaveChangesAsync();
+                NotFound("Review not found!");
             }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ReviewExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
+            return Ok(review.ToReviewDTO());
         }
 
         // POST: api/Reviews
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPost]
-        public async Task<ActionResult<Review>> PostReview(Review review)
+        [HttpPost("{userId:int}")]
+        public async Task<ActionResult<Review>> PostReview([FromRoute] int userId, CreateReviewRequestDTO reviewDto)
         {
-            _context.Reviews.Add(review);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetReview", new { id = review.Id }, review);
+            var reviewModel = reviewDto.ToStockFromCreateReview(userId);
+            await _reviewRepo.CreateAsync(reviewModel);
+            return CreatedAtAction(nameof(GetReview), new { id = reviewModel.Id }, reviewModel.ToReviewDTO());
         }
+
 
         // DELETE: api/Reviews/5
         [HttpDelete("{id}")]

@@ -16,5 +16,14 @@ namespace DoctorMagnesium.Data
         public DbSet<User> Users { get; set; }
         public DbSet<OrderedItem> OrderedItems { get; set; }
         public DbSet<Review> Reviews { get; set; }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.Reviews)
+                .WithOne(r => r.User)
+                .HasForeignKey(r => r.UserId);
+        }
     }
 }
